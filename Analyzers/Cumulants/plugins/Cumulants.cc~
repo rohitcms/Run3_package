@@ -1,0 +1,326 @@
+// -*- C++ -*-
+//
+//
+
+// system include files
+
+// CMSSW include files
+#include "FWCore/ServiceRegistry/interface/Service.h"
+#include "CommonTools/UtilAlgos/interface/TFileService.h"
+
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
+
+// user include files
+#include "Analyzers/Cumulants/interface/Cumulants.h"
+
+//
+// constructors and destructor
+//
+Cumulants::Cumulants(const edm::ParameterSet& iConfig) :
+
+  //tracks & vertex
+  //trackTags_(consumes<reco::TrackCollection>(iConfig.getParameter<edm::InputTag>("tracks"))),
+  trackTags_(consumes< edm::View< pat::PackedCandidate> >(iConfig.getParameter<edm::InputTag>("tracks"))),
+  trackTagsgen_(consumes< edm::View< pat::PackedGenParticle> >(iConfig.getParameter<edm::InputTag>("tracksgen"))),
+  chi2Map_( consumes< edm::ValueMap< float > >( iConfig.getParameter< edm::InputTag >( "trackschi2" ) ) ),
+  vtxTags_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("vertex"))),
+  //centrality bin                                                                                                                                                                                  
+  cent_bin_(consumes<int>(iConfig.getParameter<edm::InputTag>("centralitybin"))),
+  //multiplicity selection
+  centmin_(iConfig.getUntrackedParameter<int>("centmin")),
+  centmax_(iConfig.getUntrackedParameter<int>("centmax")),
+  noffmin_(iConfig.getUntrackedParameter<int>("noffmin")),
+  noffmax_(iConfig.getUntrackedParameter<int>("noffmax")),
+  ptnoffmin_(iConfig.getUntrackedParameter<double>("ptnoffmin")),
+  ptnoffmax_(iConfig.getUntrackedParameter<double>("ptnoffmax")),
+  dzdzerrornoff_(iConfig.getUntrackedParameter<double>("dzdzerrornoff")),
+  d0d0errornoff_(iConfig.getUntrackedParameter<double>("d0d0errornoff")),
+  pterrorptnoff_(iConfig.getUntrackedParameter<double>("pterrorptnoff")),
+//track selection
+  etamin_(iConfig.getUntrackedParameter<double>("etamin")),
+  etamax_(iConfig.getUntrackedParameter<double>("etamax")),
+  ptmin_(iConfig.getUntrackedParameter<double>("ptmin")),
+  ptmax_(iConfig.getUntrackedParameter<double>("ptmax")),
+  dzdzerror_(iConfig.getUntrackedParameter<double>("dzdzerror")),
+  d0d0error_(iConfig.getUntrackedParameter<double>("d0d0error")),
+  pterrorpt_(iConfig.getUntrackedParameter<double>("pterrorpt")),
+//vertex selection
+  minvz_(iConfig.getUntrackedParameter<double>("minvz")),
+  maxvz_(iConfig.getUntrackedParameter<double>("maxvz")),
+  maxrho_(iConfig.getUntrackedParameter<double>("maxrho")),
+  isBVselByMult_(iConfig.getUntrackedParameter<bool>("isBVselByMult")),
+  nvtx_(iConfig.getUntrackedParameter<int>("nvtx",-1)),
+  xBestVtx_(iConfig.getUntrackedParameter<double>("xVtx",-99999)),
+  yBestVtx_(iConfig.getUntrackedParameter<double>("yVtx",-99999)),
+  rhoBestVtx_(iConfig.getUntrackedParameter<double>("rhoVtx",-99999)),
+  zBestVtx_(iConfig.getUntrackedParameter<double>("zVtx",-99999)),
+  xBestVtxError_(iConfig.getUntrackedParameter<double>("xVtxError",-99999)),
+  yBestVtxError_(iConfig.getUntrackedParameter<double>("yVtxError",-99999)),
+  zBestVtxError_(iConfig.getUntrackedParameter<double>("zVtxError",-99999)),
+
+  cweight_(iConfig.getUntrackedParameter<bool>("cweight")),
+//file acc & eff & fake
+  fname_(iConfig.getUntrackedParameter<edm::InputTag>("fname")),
+  effmultbin_(iConfig.getUntrackedParameter< std::vector<int> >("effmultbin")),
+
+  //EFF correction
+  fpt_(iConfig.getUntrackedParameter<edm::InputTag>("fpt")),
+  fmb_(iConfig.getUntrackedParameter<edm::InputTag>("fmb")),
+  fplus_(iConfig.getUntrackedParameter<edm::InputTag>("fplus")),
+  fminus_(iConfig.getUntrackedParameter<edm::InputTag>("fminus")),
+  fpix_(iConfig.getUntrackedParameter<edm::InputTag>("fpix"))
+
+
+{
+   TString filename(fname_.label().c_str());
+   feff_ = 0x0;
+   if(cweight_ && !filename.IsNull())
+   {
+      edm::FileInPath fip(Form("Analyzers/Cumulants/data/EFF/%s",filename.Data()));
+      feff_ = new TFile(fip.fullPath().c_str(),"READ");
+
+      heff_.resize(feff_->GetNkeys());
+      if(heff_.size() != effmultbin_.size() - 1)
+      {
+         edm::LogWarning ("Inconsitent binning") << " Inconsistent binning for the acc X eff correction..."
+                                                 << " You might have wrong setting here";
+      }
+
+      for(unsigned short ik = 0; ik < heff_.size(); ++ik)
+      {
+         heff_[ik] = (TH2D*) feff_->Get(feff_->GetListOfKeys()->At(ik)->GetName());
+      }
+      feff_->Close();
+   }
+
+
+   //Ouptut
+   usesResource("TFileService");
+//   edm::Service<TFileService> fs;
+   // Histograms
+}
+
+void Cumulants::beginJob()
+{
+   TFileDirectory fVtxHist  = fs->mkdir("Vertex");
+   hXBestVtx_   = fVtxHist.make<TH1F>("hXvtx", "", 80, -0.2, 0.2);
+   hYBestVtx_   = fVtxHist.make<TH1F>("hYvtx", "", 80, -0.2, 0.2);
+   hRhoBestVtx_ = fVtxHist.make<TH1F>("hRvtx", "", 80, -0.2, 0.2);
+   hZBestVtx_   = fVtxHist.make<TH1F>("hZvtx", "", 60, -30., 30.);
+   hcent_bin    = fVtxHist.make<TH1F>("hcent_bin", "", 200, 0.0, 200.0);
+   TFileDirectory fTrkHist  = fs->mkdir("Tracks");
+   hEtaTrk_ = fTrkHist.make<TH1F>("hEtatrk", "", 30, -3.,   3.);
+   hPtTrk_  = fTrkHist.make<TH1F>("hPttrk",  "", 130,  0.,  13.);
+   hPhiTrk_ = fTrkHist.make<TH1F>("hPhitrk", "", 64, -3.2,  3.2);
+   hEtaNoff_ = fTrkHist.make<TH1F>("hEtaNoff", "", 30, -3.,   3.);
+   hPtNoff_  = fTrkHist.make<TH1F>("hPtNoff",  "", 100,  0.,  200.);
+   hPhiNoff_ = fTrkHist.make<TH1F>("hPhiNoff", "", 64, -3.2,  3.2);
+   // TTree
+   trEvent_ = fs->make<TTree>("trEvent", "trEvent");
+   trEvent_->Branch("centrality", &cent_, "centrality/I");
+   // trEvent_->Branch("nVtx",       &nvtx_, "nVtx/I");
+   trEvent_->Branch("Noff",       &noff_, "Noff/I");
+   trEvent_->Branch("Mult",       &mult_, "Mult/I");
+}
+   
+
+Cumulants::~Cumulants()
+{
+ 
+   // do anything here that needs to be done at desctruction time
+   // (e.g. close files, deallocate resources etc.)
+
+}
+
+
+//
+// member functions
+//
+
+// ------------ method called for each event  ------------
+void
+Cumulants::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
+{
+  
+  using namespace edm;
+  using namespace std;
+
+  //track collection 
+  auto trks = iEvent.getHandle( trackTags_ );
+
+  //access tracks chi2/ndf
+  auto chi2Map = iEvent.getHandle( chi2Map_ );
+
+  //vtx collection      
+  auto pvs = iEvent.getHandle( vtxTags_ );
+
+               
+  xBestVtx_      = -999.;
+  yBestVtx_      = -999.;
+  rhoBestVtx_    = -999.;
+  zBestVtx_      = -999.; //Best vtx coordinates                                                     
+  xBestVtxError_ = -999.;
+  yBestVtxError_ = -999.;
+  zBestVtxError_ = -999.; //Best vtx error      
+         
+  double bestvzError;
+  math::XYZPoint bestvtx;
+  math::Error<3>::type vtx_cov;
+   if ( !pvs->empty() ) {
+     const reco::Vertex& vtx = (*pvs)[0];
+  //  int primaryvtx = 0 ; 
+ 
+     bestvzError = vtx.zError();
+     bestvtx = vtx.position();
+     vtx_cov = vtx.covariance();
+     }else {
+     return;
+   }
+
+  xBestVtx_ = bestvtx.x();
+  yBestVtx_ = bestvtx.y();
+  zBestVtx_ = bestvtx.z();
+   
+ //  hZBestVtx_ -> Fill(zBestVtx_);
+  
+  //if ( zBestVtx_ < minvz_ || zBestVtx_ > maxvz_ ) return;
+  if ( std::abs( bestvtx.z() ) > 15. ) return;
+  hZBestVtx_ -> Fill(zBestVtx_);
+  
+  // ----------------- centrality selection -------------------------------                                                                                                                                 //access centrality bins 
+  auto cbin = iEvent.getHandle( cent_bin_ );
+  centBin = ( float ) (*cbin);
+  
+  if (centBin < centmin_*2 || centBin >= centmax_*2) return;
+  cent_ = centBin ; 
+  //  hZBestVtx_ -> Fill(zBestVtx_);
+  hcent_bin -> Fill(centBin);
+
+  
+  mult_ = 0; // Event multiplicity                                                                                                                                                                        
+  noff_ = 0 ; 
+  //track loop
+  int trkIndx = -1;
+  for (auto const& trk : *trks)
+  {
+    trkIndx++;
+
+    if ( !trk.hasTrackDetails() ) continue;
+    auto iter_tk = trk.pseudoTrack();
+      
+    double dzvtx = iter_tk.dz( bestvtx );
+    double dxyvtx = iter_tk.dxy( bestvtx );
+    double dzerror = std::hypot( iter_tk.dzError(), bestvzError );
+    double dxyerror = iter_tk.dxyError( bestvtx, vtx_cov );
+    double pterror = iter_tk.ptError();
+    
+      // Get eta, pt, and charge of the track                                                                                                                                                              
+    double pt = iter_tk.pt();
+    double eta = iter_tk.eta();
+    int charge = iter_tk.charge();
+    double phi = iter_tk.phi();
+
+    auto hit_pattern = iter_tk.hitPattern();
+
+      //HI specific cuts                                                                                                                                                                                   
+    double chi2ndof = ( double ) ( *chi2Map )[ trks->ptrAt( trkIndx ) ];
+    double dcaxy = (dxyvtx / dxyerror);
+    double dcaz = (dzvtx / dzerror);
+    double ptreso = (fabs(pterror) / pt);
+    int nHits = iter_tk.numberOfValidHits();
+    double chi2n = ( chi2ndof / hit_pattern.trackerLayersWithMeasurement() );
+
+      //selected tracks                                                                                                                                                                                    
+      if( charge == 0 ) continue;
+      if( pt < 0.0001) continue ; 
+      if( fabs(pterror) / pt > 0.1 ) continue; //changed, 30.07.2023 
+      if( fabs(dzvtx / dzerror) >= 3.0 ) continue; 
+      if( fabs(dxyvtx / dxyerror) >= 3.0  ) continue; 
+      if( ( chi2ndof / hit_pattern.trackerLayersWithMeasurement() ) >= 0.18 ) continue;
+      if ( iter_tk.numberOfValidHits() < 11 ) continue;
+      if( iter_tk.quality(reco::TrackBase::qualityByName("highPurity")) != 1 ) continue;
+      
+      // Track selection for analysis                                                                                                                                                                    
+      if(eta < etamin_ || eta > etamax_) continue ;
+      if(pt < ptmin_ || pt > ptmax_)     continue;
+      
+      if(pt >= ptnoffmin_ && pt <= ptnoffmax_) 
+      	{
+	  ++noff_ ;
+      	}
+      // ++noff_ ; 
+
+      // Compute weights
+      double weight = 1.0 ; 
+      //std::cout << "Is the correction selected? " << cweight_ << ", weight = " << weight << std::endl;
+      if( cweight_ )
+	{
+	  int idx = getEffNoffIndex();
+	  //	   std::cout<<idx<<std::endl;
+	  if( idx < 0 )
+	    {
+	      edm::LogError ("Wrong index") <<"Index for efficiency correction not found";
+	      return;
+	    }
+	  
+	  if( feff_ && heff_[idx] ) 
+	    { 
+	      if( heff_[idx]->GetBinContent(heff_[idx]->FindBin(eta,pt)) != 0. ) 
+		{
+		  weight = 1./heff_[idx]->GetBinContent(heff_[idx]->FindBin(eta,pt));
+		  //   std::cout << "weight = " << weight << std::endl;
+		}
+	    }
+	}
+      // Increase N valid tracks
+      ++mult_;
+
+      hEtaTrk_->Fill(eta);
+      hPtTrk_ ->Fill(pt);
+      hPhiTrk_->Fill(phi);
+      
+  }
+  
+  
+   // Fill TTree
+   cent_ = centBin;
+   //cent_ = 1;
+   if(mult_ > 0) trEvent_->Fill();
+}
+
+
+// ------------ method called once each job just before starting event loop  ------------
+//void 
+//Cumulants::beginJob()
+//{
+//}
+
+// ------------ method called once each job just after ending the event loop  ------------
+void 
+Cumulants::endJob() 
+{
+}
+
+// ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
+void
+Cumulants::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
+{
+   //The following says we do not know what parameters are allowed so do no validation
+   // Please change this to state exactly what you do use, even if it is no parameters
+   edm::ParameterSetDescription desc;
+   desc.setUnknown();
+   descriptions.addDefault(desc);
+}
+
+int
+Cumulants::getEffNoffIndex() 
+{
+   for( int idx = 0; idx < (int) effmultbin_.size() - 1; ++idx )
+   {
+      if( cent_ >= effmultbin_[idx] && cent_ < effmultbin_[idx+1] ) return idx;
+   }
+   return -1;  
+}
+
+//define this as a plug-in
+DEFINE_FWK_MODULE(Cumulants);

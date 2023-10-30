@@ -1,0 +1,116 @@
+import FWCore.ParameterSet.Config as cms
+
+process = cms.Process("CmsTwoPartCorrAnalysis")
+process.load('Configuration.StandardSequences.Services_cff')
+process.load('FWCore.MessageService.MessageLogger_cfi')
+process.load('Configuration.Geometry.GeometryDB_cff')
+process.load('Configuration.StandardSequences.MagneticField_38T_cff')
+process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
+
+
+# __________________ General _________________
+
+# Configure the logger
+process.load("FWCore.MessageService.MessageLogger_cfi")
+process.MessageLogger.cerr.FwkReport.reportEvery = 10    
+
+# Configure the number of maximum event the analyser run on in interactive mode
+# -1 == ALL
+process.maxEvents = cms.untracked.PSet( 
+    #input = cms.untracked.int32(-1) 
+    input = cms.untracked.int32(1000) 
+    
+)
+
+#process.options = cms.untracked.PSet(wantSummary = cms.untracked.bool(True))
+
+
+
+# __________________ I/O files _________________
+
+#----- Testing one One file -------------------
+process.source = cms.Source("PoolSource",
+                            duplicateCheckMode = cms.untracked.string("noDuplicateCheck"),
+                            fileNames = cms.untracked.vstring(
+                                
+'/store/user/caber/PixelTracks3pletsPlus4plets_HIMinimumBias2_HIRun2018Av1/HIMinimumBias2/crab_PixelTracks3pletsPlus4plets_HIMinimumBias2_HIRun2018Av1/201026_034756/0000/out_data_1.root'
+                                
+        
+
+),
+
+
+)
+#----------------------------------------------
+
+# Define output file name
+import os
+process.TFileService = cms.Service("TFileService",
+                                   fileName = cms.string('chargeptdepcorr_central.root')
+                                   
+)
+# __________________ Event selection _________________
+###from GO - begin
+process.load("TrackingTools/TransientTrack/TransientTrackBuilder_cfi")
+process.load('HeavyIonsAnalysis.Configuration.collisionEventSelection_cff')
+process.load('HeavyIonsAnalysis.Configuration.hfCoincFilter_cff')
+process.primaryVertexFilter.src = cms.InputTag("offlinePrimaryVertices")
+process.clusterCompatibilityFilter  = cms.EDFilter('HIClusterCompatibilityFilter',
+                                                   cluscomSrc = cms.InputTag("hiClusterCompatibility"),
+                                                   minZ          = cms.double(-20.0),
+                                                   maxZ          = cms.double(20.05),
+                                                   clusterPars   = cms.vdouble(0.0,0.0045),
+                                                   nhitsTrunc    = cms.int32(150),
+                                                   clusterTrunc  = cms.double(2.0)
+                                                   )
+"""
+process.offlinePrimaryVerticesRecovery = cms.EDProducer("PrimaryVertexRecoveryProducer",
+    TkClusParameters = cms.PSet(
+        TkGapClusParameters = cms.PSet(
+            zSeparation = cms.double(1.0)
+        ),
+        algorithm = cms.string('gap')
+    ),
+)
+"""
+
+from Configuration.AlCa.GlobalTag import GlobalTag
+process.GlobalTag = GlobalTag(process.GlobalTag, '103X_dataRun2_Prompt_v2', '')
+#process.HiForest.GlobalTagLabel = process.GlobalTag.globaltag                                                                         
+
+print('\n\033[31m~*~ USING CENTRALITY TABLE FOR PbPb 2018 ~*~\033[0m\n')
+process.GlobalTag.snapshotTime = cms.string("9999-12-31 23:59:59.000")
+process.GlobalTag.toGet.extend([
+    cms.PSet(record = cms.string("HeavyIonRcd"),
+        tag = cms.string("CentralityTable_HFtowers200_DataPbPb_periHYDJETshape_run2v1031x02_offline"),
+        connect = cms.string("frontier://FrontierProd/CMS_CONDITIONS"),
+        label = cms.untracked.string("HFtowers")
+        ),
+    ])
+
+#==================================================================
+process.load("RecoHI.HiCentralityAlgos.CentralityBin_cfi")
+process.centralityBin.Centrality = cms.InputTag("hiCentrality")
+process.centralityBin.centralityVariable = cms.string("HFtowers")
+
+
+# __________________ Analyse Sequence _________________
+
+# Load you analyzer with initial configuration
+process.load("Analyzers.CmsTwoPartCorrAnalysis.chargedepptcorr_cff")
+process.defaultAnalysis_05   = process.CPDC05.clone()
+#process.defaultAnalysis_1015   = process.CPDC1015.clone()
+
+process.p = cms.Path(
+    #process.offlinePrimaryVerticesRecovery * ###from GO event selection
+                     process.primaryVertexFilter * ###from GO event selection 
+                     process.hfCoincFilter2Th4 * ###from GO event selection
+                     process.clusterCompatibilityFilter * ###from GO event selection
+                     process.centralityBin * ###from GO event selection
+                     process.defaultAnalysis_05 )
+                     
+                     
+                     
+                     
+
+
