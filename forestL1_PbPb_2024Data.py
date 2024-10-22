@@ -5,15 +5,15 @@
 
 from Configuration.Applications.ConfigBuilder import MassReplaceInputTag
 import FWCore.ParameterSet.Config as cms
-from Configuration.Eras.Era_Run3_pp_on_PbPb_2023_cff import Run3_pp_on_PbPb_2023
-process = cms.Process('HiForest',Run3_pp_on_PbPb_2023)
+from Configuration.Eras.Era_Run3_pp_on_PbPb_cff import Run3_pp_on_PbPb
+process = cms.Process('HiForest',Run3_pp_on_PbPb)
 
 #####################################################################################
 # HiForest labeling info
 #####################################################################################
 
 process.load("HeavyIonsAnalysis.EventAnalysis.HiForestInfo_cfi")
-process.HiForestInfo.info = cms.vstring("HiForest, miniAOD, 140X, data")
+process.HiForestInfo.info = cms.vstring("HiForest, miniAOD, 141X, data")
 
 #####################################################################################
 # Input source
@@ -72,7 +72,7 @@ process.load('SimGeneral.HepPDTESSource.pythiapdt_cfi')
 process.load('Configuration.EventContent.EventContent_cff')
 process.load('Configuration.StandardSequences.RawToDigi_DataMapper_cff')
 process.load('Configuration.StandardSequences.EndOfProcess_cff')
-#process.load("SimCalorimetry.HcalTrigPrimProducers.hcaltpdigi_cff")
+process.load("SimCalorimetry.HcalTrigPrimProducers.hcaltpdigi_cff")
 
 process.options = cms.untracked.PSet(
 #    FailPath = cms.untracked.vstring(),
@@ -107,10 +107,10 @@ process.options = cms.untracked.PSet(
 )
 
 from Configuration.AlCa.GlobalTag import GlobalTag
-#process.HcalTPGCoderULUT.LUTGenerationMode = cms.bool(False)
-#process.GlobalTag = GlobalTag(process.GlobalTag, '141X_dataRun3_HLT_Candidate_2024_10_20_06_24_01', 'Tag,HcalL1TriggerObjectsRcd,sqlite_file:HcalL1TriggerObjects_2024_ZDC_HCAL_B.db')
+process.HcalTPGCoderULUT.LUTGenerationMode = cms.bool(False)
+process.GlobalTag = GlobalTag(process.GlobalTag, '141X_dataRun3_Prompt_Candidate_2024_10_20_06_26_43', 'Tag,HcalL1TriggerObjectsRcd,sqlite_file:HcalL1TriggerObjects_2024_ZDC_HCAL_B.db')
 #process.GlobalTag = GlobalTag(process.GlobalTag, '132X_dataRun3_Prompt_v7', '')
-process.GlobalTag = GlobalTag(process.GlobalTag, '141X_dataRun3_Prompt_Candidate_2024_10_20_06_26_43', '') 
+#process.GlobalTag = GlobalTag(process.GlobalTag, '141X_dataRun3_Prompt_Candidate_2024_10_20_06_26_43', '') 
 process.HiForestInfo.GlobalTagLabel = process.GlobalTag.globaltag
 
 # process.GlobalTag.snapshotTime = cms.string("9999-12-31 23:59:59.000")
@@ -207,7 +207,7 @@ process.load('HeavyIonsAnalysis.ZDCAnalysis.QWZDC2018Producer_cfi')
 process.load('HeavyIonsAnalysis.ZDCAnalysis.QWZDC2018RecHit_cfi')
 process.load('HeavyIonsAnalysis.ZDCAnalysis.zdcanalyzer_cfi')
 
-process.zdcdigi.SOI = cms.untracked.int32(2)
+#process.zdcdigi.SOI = cms.untracked.int32(2)
 process.zdcanalyzer.doZDCRecHit = False
 process.zdcanalyzer.doZDCDigi = True
 process.zdcanalyzer.zdcRecHitSrc = cms.InputTag("QWzdcreco")
@@ -215,29 +215,31 @@ process.zdcanalyzer.zdcDigiSrc = cms.InputTag("hcalDigis", "ZDC")
 process.zdcanalyzer.calZDCDigi = False
 process.zdcanalyzer.verbose = False
 process.zdcanalyzer.nZdcTs = cms.int32(6)
+process.zdcanalyzer_step = cms.Path(process.zdcanalyzer)
+#process.schedule.append(process.zdcanalyzer_step)
 
 from CondCore.CondDB.CondDB_cfi import *
 
-process.es_pool = cms.ESSource("PoolDBESSource",
-    timetype = cms.string('runnumber'),
-    toGet = cms.VPSet(
-        cms.PSet(
-            record = cms.string("HcalElectronicsMapRcd"),
-            tag = cms.string("HcalElectronicsMap_2021_v2.0_data")
-        )
-    ),
-    connect = cms.string('frontier://FrontierProd/CMS_CONDITIONS'),
-    authenticationMethod = cms.untracked.uint32(1)
-)
-process.es_prefer = cms.ESPrefer('HcalTextCalibrations', 'es_ascii')
-process.es_ascii = cms.ESSource('HcalTextCalibrations',
-    input = cms.VPSet(
-        cms.PSet(
-            object = cms.string('ElectronicsMap'),
-            file = cms.FileInPath("L1Trigger/L1TZDC/data/emap_2023_newZDC_v3.txt")
-        )
-    )
-)
+#process.es_pool = cms.ESSource("PoolDBESSource",
+#    timetype = cms.string('runnumber'),
+#    toGet = cms.VPSet(
+#        cms.PSet(
+#            record = cms.string("HcalElectronicsMapRcd"),
+#            tag = cms.string("HcalElectronicsMap_2021_v2.0_data")
+#        )
+#    ),
+#    connect = cms.string('frontier://FrontierProd/CMS_CONDITIONS'),
+#    authenticationMethod = cms.untracked.uint32(1)
+#)
+#process.es_prefer = cms.ESPrefer('HcalTextCalibrations', 'es_ascii')
+#process.es_ascii = cms.ESSource('HcalTextCalibrations',
+#    input = cms.VPSet(
+#        cms.PSet(
+#            object = cms.string('ElectronicsMap'),
+#            file = cms.FileInPath("L1Trigger/L1TZDC/data/emap_2023_newZDC_v3.txt")
+#        )
+#    )
+#)
 
 #########################
 # Main analysis list
@@ -409,17 +411,17 @@ process.endjob_step = cms.EndPath(process.endOfProcess)
 process.schedule = cms.Schedule(process.forest,process.raw2digi_step,process.endjob_step)
 from PhysicsTools.PatAlgos.tools.helpers import associatePatAlgosToolsTask
 associatePatAlgosToolsTask(process)
-
+process.schedule.append(process.zdcanalyzer_step)
 #####################################################################################
 # L1 emulation
 #####################################################################################
 
 # Automatic addition of the customisation function from L1Trigger.Configuration.customiseReEmul
-from L1Trigger.Configuration.customiseReEmul import L1TReEmulFromRAW
-#from L1Trigger.Configuration.customiseReEmul import L1TReEmulFromRAWsimHcalTP
-#process = L1TReEmulFromRAWsimHcalTP(process)
+#from L1Trigger.Configuration.customiseReEmul import L1TReEmulFromRAW
+from L1Trigger.Configuration.customiseReEmul import L1TReEmulFromRAWsimHcalTP
+process = L1TReEmulFromRAWsimHcalTP(process)
 # Call to customisation function L1TReEmulFromRAW imported from L1Trigger.Configuration.customiseReEmul
-process = L1TReEmulFromRAW(process)
+#process = L1TReEmulFromRAW(process)
 
 # Automatic addition of the customisation function from L1Trigger.L1TNtuples.customiseL1Ntuple
 from L1Trigger.L1TNtuples.customiseL1Ntuple import L1NtupleRAWEMU 
@@ -447,20 +449,30 @@ process = L1TGlobalMenuXML(process)
 from Configuration.StandardSequences.earlyDeleteSettings_cff import customiseEarlyDelete
 process = customiseEarlyDelete(process)
 
-process.l1UpgradeTree.sumZDCTag = cms.untracked.InputTag("etSumZdcProducer")
-process.l1UpgradeEmuTree.sumZDCTag = cms.untracked.InputTag("etSumZdcProducer")
+# unpacked etsums
+process.l1UpgradeTree.sumZDCTag = cms.untracked.InputTag("gtStage2Digis","EtSumZDC") 
+process.l1UpgradeTree.sumZDCToken = cms.untracked.InputTag("gtStage2Digis","EtSumZDC")
 
-#process.etSumZdcProducer = cms.EDProducer('L1TZDCProducer',
-#  zdcDigis = cms.InputTag("hcalDigis", "ZDC")
-#)
+# l1 emulator sums
+process.l1UpgradeEmuTree.sumZDCTag = cms.untracked.InputTag("etSumZdcProducer")
+process.l1UpgradeEmuTree.sumZDCToken = cms.untracked.InputTag("etSumZdcProducer")
+
+# do not change these settings
 process.etSumZdcProducer = cms.EDProducer('L1TZDCProducer',
                                           hcalTPDigis = cms.InputTag("simHcalTriggerPrimitiveDigis"),
-#                                          hcalTPDigis = cms.InputTag("hcalDigis"),                                                                      
+#                                          hcalTPDigis = cms.InputTag("hcalDigis"),
                                           bxFirst = cms.int32(-2),
                                           bxLast = cms.int32(3)
 )
+
+#Via Hannah, for the simHcal collection
+process.simHcalTriggerPrimitiveDigis.inputLabel = cms.VInputTag("hcalDigis", "hcalDigis:ZDC")
+process.simHcalTriggerPrimitiveDigis.inputUpgradeLabel = cms.VInputTag("hcalDigis", "hcalDigis:ZDC")
+
+
 process.etSumZdc = cms.Path(process.etSumZdcProducer)
 process.schedule.append(process.etSumZdc)
+#======================================================================
 
 process.HFAdcana = cms.EDAnalyzer("HFAdcToGeV",
     digiLabel = cms.untracked.InputTag("hcalDigis"),
