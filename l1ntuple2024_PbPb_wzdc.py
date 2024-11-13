@@ -1,7 +1,4 @@
-# L1Ntuple for ZDC studies with 2023 data
-# Hannah Bossi, <hannah.bossi@cern.ch>
-# original file in https://raw.githubusercontent.com/hjbossi/ZDCOnlineMonitoring/refs/heads/main/python/l1Ntuple2024.py
-# 9/17/2023
+
 import FWCore.ParameterSet.Config as cms
 import os
 import sys
